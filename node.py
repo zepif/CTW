@@ -10,17 +10,25 @@ class Node():
     def __str__(self):
         return "[%d,%d]" % (self.c[0], self.c[1])
 
-    def getp(self, x):
-        np = (self.c[x[-1]] + 0.5) / (self.c[0] + self.c[1] + 1)
-        if self.n[x[-1]] is not None:
-            return self.n[x[-1]].getp(x[:-1])
-        return np
+    def getp_recurse(self, x, p):
+        np = (self.c[p] + 0.5) / (self.c[0] + self.c[1] + 1)
+        if x != [] and self.n[x[-1]] is not None:
+            ret = self.n[x[-1]].getp_recurse(x[:-1], p)
+            return ret + [np]
+        return [np]
 
-    def add(self, x):
-        t = x[-1]
-        self.c[t] += 1
-        if x[:-1] == []:
+    def getp(self, x, p):
+        l = self.getp_recurse(x, p)
+        ret = l[-1]
+        for x in l[:-1][::-1]:
+            ret = 0.5 * ret + 0.5*x
+        return ret
+
+    def add(self, x, p):
+        self.c[p] += 1
+        if x == []:
             return
+        t = x[-1]
         if self.n[t] is None:
             self.n[t] = Node()
-        self.n[t].add(x[:-1])
+        self.n[t].add(x[:-1], p)
