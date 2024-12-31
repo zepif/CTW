@@ -1,5 +1,8 @@
+import sys
 import math
-from node import Node, nodes
+import numpy as np
+from node import Node, nodes, NUMBER_OF_BITS
+from coder import Coder
 
 # P(x_i == 1 | x_0:i-1)
 
@@ -8,144 +11,106 @@ from node import Node, nodes
 #     7z: 26080305 
 
 # enwik4: 10000
-#   gzip: 3820
+#   gzip: 3820 <-- not easy to beat actually
 #     7z: 3738
-#    ctw: 2941.22 how it feels gzip to be beaten in 90 lines???
+#    ctw: 6248
 
 enw = open("enwik4", "rb").read()
+
+def clip(x, mn, mx):
+    if x < mn:
+        x = mn
+    if x > mx:
+        x = mx
+    return x
 
 def bitgen(x):
     for c in x:
         for i in range(8):
             yield int((c & (0x80>>i)) != 0)
 
-def setgen(x, l):
-    bg = bitgen(x)
-    ret = []
-    while 1:
-        ret.append(next(bg))
-        ret = ret[-l:]
-        if len(ret) == l:
-            yield ret
+def run(fn="enwik4", compress=True):
+    if compress:
+        enw = open(fn, "rb").read()
+        bg = bitgen(enw)
+        enc = Coder()
+    else:
+        dec = Coder(open(fn + ".out", "rb").read())
 
-def quantize(x):
-    x = int(x*256.0 + 0.5)
-    if x == 0:  
-        x = 1
-    if x == 255:
-        x = 254
-    return x
+    root = Node()
+    H = 0.0
+    cnt = 0
+    stream = []
+    try:
+        prevx = [0]*NUMBER_OF_BITS
+        while 1:
+            cnt += 1
 
-class Encoder():
-    def __init__(self, f):
-        self.l = 0
-        self.h = 1
-        self.d = 1
-        self.sd = 0
-        self.ob = []
+            # print(root.pw)
+            pn = root.find(prevx)
 
-    def code(self, p_0, x):
-        # this is implied times 256
-        pn = p_0 * (self.h - self.l)
+            # what if a wild 0 appeared? this is wrong because creation might happen...
+            prev = pn.pw
+            pn.update(0)
+            after = pn.pw
+            pn.update(0, True)
+            p_0 = np.exp(after - prev)
 
-        # ok to multiply all by 256
-        self.l *= 256
-        self.h *= 256
-        self.d *= 256
-        self.sd += 8
+            if compress:
+                x = next(bg)
+                enc.code(p_0, x)
+            else:
+                x = dec.code(p_0)
+            stream.append(x)
 
-        if x == 0:
-            self.h -= pn
-        else:
-            self.l += pn
+            p_x = p_0 if x == 0 else (1.0 - p_0)
+            H += -math.log2(p_x)
 
-        # reduce fractions
-        while self.l%2 == 0 and self.h%2 == 0 and self.d%2 == 0:
-            self.l //= 2
-            self.h //= 2
-            self.d //= 2
-            self.sd -= 1
+            tn = root.find(prevx, create=True)
+            tn.update(x)
 
-        # output bit
-        sr = self.sd
-        if sr > 8:
-            lb = self.l >> (sr-8)
-            hb = self.h >> (sr-8)
-            if lb == hb:
-                self.ob.append(lb)
-                self.l -= lb << (sr-8)
-                self.h -= lb << (sr-8)
-                self.d /= 256
-                self.sd -= 8
-        #print(hex(self.l), hex(self.h))
+            prevx.append(x)
+            prevx = prevx[-NUMBER_OF_BITS-1:]
+            if cnt % 5000 == 0:
+                ctw_bytes = (root.pw / np.log(2)) / -8
+                print("%5d: ratio %.2f%%, %d nodes, %.2f bytes, %.2f ctw" % (cnt//8, H*100.0/cnt, len(nodes), H/8.0, ctw_bytes))
 
-enc = Encoder(open("enwik4.out", "wb"))
+            # TODO: make this generic
+            if not compress and cnt == 80000:
+                break
 
-NUMBER_OF_BITS = 16
-sg = setgen(enw, NUMBER_OF_BITS)    
-bg = bitgen(enw)
+    except StopIteration:
+        pass
 
-root = Node()
-H = 0.0
-cnt = 0
-try:
-    prevx = [0]*(NUMBER_OF_BITS+1)
-    while 1:
-        cnt += 1
-        x = next(bg)
+    if compress:
+        print("%.2f bytes of entropy, %d nodes, %d bits, %d bytes" % (H/8.0, len(nodes), len(stream), len(enc.ob)))
 
-        # finite precision bro
-        p_0 = root.getp(prevx, 0)
-        enc.code(quantize(p_0), x)
+    if compress:
+        with open(fn+'.out', "wb") as f:
+            f.write(bytes(enc.ob))
+            f.write(bytes([enc.h>>24, 0, 0, 0]))
+    else:
+        '''
+        ob = []
+        for i in range(0, len(stream), 8):
+            tb = stream[i:i+8]
+            rr = 0
+            for j in tb:
+                rr <<= 1
+                rr |= j
+            ob.append(rr)
+        '''
 
-        p_x = p_0 if x == 0 else (1.0 - p_0)
-        H += math.log2(1/p_x)
+        ob = [
+            int(''.join(str(bit) for bit in stream[i:i+8]), 2)
+            for i in range(0, len(stream), 8)
+        ]
 
-        root.add(prevx, x)
-        prevx.append(x)
-        prevx = prevx[-NUMBER_OF_BITS-1:]
-        if cnt % 5000 == 0:
-            print("ratio %.2f%%, %d nodes, %f bytes, %f realbytes" % (H*100.0/cnt, len(nodes), H/8.0, len(enc.ob)))
-except StopIteration:
-    pass
+        with open(fn+".dec", "wb") as f:
+            f.write(bytes(ob))
 
-#print(NUMBER_OF_BITS)
-print("%.2f bytes of entropy, %d nodes" % (H/8.0, len(nodes)))
-#for n in nodes:
-#    print(n)
-
-exit(0)
-
-from collections import defaultdict
-
-NUMBER_OF_BITS = 16
-
-lookup = defaultdict(lambda: [0, 0])
-bg = bitgen(enw)
-H = 0.0
-cnt = 0
-try: 
-    prevx = [0]*NUMBER_OF_BITS
-    while 1:
-        cnt += 1
-        x = next(bg)
-
-        # use tables
-        px = tuple(prevx)
-
-        # lookup[px] = P(x_i == 1 | x_i-5:i-1)
-        # https://en.wikipedia.org/wiki/Krichevsky–Trofimov_estimator
-        p_x = (lookup[px][x] + 0.5) / (lookup[px][0] + lookup[px][1] + 1)
-        H += -math.log2(p_x)
-
-        # increment tables
-        lookup[px][x] += 1
-        prevx.append(x)
-        prevx = prevx[-NUMBER_OF_BITS:]
-        #if cnt % 1000 == 0:
-        #    print("ratio %f" % (H*100/cnt))
-
-except StopIteration:
-    pass
-
-print("%.2f bytes of entropy" % (H/8.0))
+if __name__ == "__main__":
+    if sys.argv[1] == "x":
+        run(sys.argv[2], False)
+    if sys.argv[1] == "c":
+        run(sys.argv[2])
