@@ -3,7 +3,7 @@ import numpy as np
 
 nodes = []
 
-NUMBER_OF_BITS = 32
+NUMBER_OF_BITS = 5+6
 
 class Node():
     def __init__(self, parent=None):
@@ -32,16 +32,14 @@ class Node():
     
     def update(self, x, reverse=False):
         if reverse == False:
-            self.pe += np.log(self.c[x] + 0.5) - np.log(self.c[0] + self.c[1] + 1.0)
+            self.pe += math.log(self.c[x] + 0.5) - math.log(self.c[0] + self.c[1] + 1.0)
             self.c[x] += 1
         else:
             self.c[x] -= 1
-            self.pe -= np.log(self.c[x] + 0.5) - np.log(self.c[0] + self.c[1] + 1.0)
+            self.pe -= math.log(self.c[x] + 0.5) - math.log(self.c[0] + self.c[1] + 1.0)
         
         if self.n is not None:
-            self.pw = np.log(0.5) + np.logaddexp(self.pe, self.n[0].pw + self.n[1].pw)
-        elif self.depth == NUMBER_OF_BITS:
-            self.pw = self.pe
+            self.pw = math.log(0.5) + np.logaddexp(self.pe, self.n[0].pw + self.n[1].pw)
         else:
             # self.pw = np.log(0.5) + self.pe
             self.pw = self.pe

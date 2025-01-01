@@ -52,9 +52,9 @@ def run(fn="enwik4", compress=True):
             # what if a wild 0 appeared? this is wrong because creation might happen...
             prev = pn.pw
             pn.update(0)
-            after = pn.pw
+            after_0 = pn.pw
             pn.update(0, True)
-            p_0 = np.exp(after - prev)
+            p_0 = np.exp(after_0 - prev)
 
             if compress:
                 x = next(bg)
@@ -70,9 +70,9 @@ def run(fn="enwik4", compress=True):
             tn.update(x)
 
             prevx.append(x)
-            prevx = prevx[-NUMBER_OF_BITS-1:]
+            prevx = prevx[-NUMBER_OF_BITS:]
             if cnt % 5000 == 0:
-                ctw_bytes = (root.pw / np.log(2)) / -8
+                ctw_bytes = (root.pw / math.log(2)) / -8
                 print("%5d: ratio %.2f%%, %d nodes, %.2f bytes, %.2f ctw" % (cnt//8, H*100.0/cnt, len(nodes), H/8.0, ctw_bytes))
 
             # TODO: make this generic
