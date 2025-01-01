@@ -13,7 +13,7 @@ from coder import Coder
 # enwik4: 10000
 #   gzip: 3820 <-- not easy to beat actually
 #     7z: 3738
-#    ctw: 6248
+#    ctw: 5019.24
 
 enw = open("enwik4", "rb").read()
 
@@ -47,7 +47,7 @@ def run(fn="enwik4", compress=True):
             cnt += 1
 
             # print(root.pw)
-            pn = root.find(prevx)
+            pn = root.find(prevx, True)
 
             # what if a wild 0 appeared? this is wrong because creation might happen...
             prev = pn.pw

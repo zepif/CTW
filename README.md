@@ -3,6 +3,7 @@
 CTW compressor. How long before we beat gzip
 
 gzip: 3728 bytes <-- not easy to beat actually
+
 xz:   3656 bytes
 
 
